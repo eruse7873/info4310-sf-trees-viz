@@ -1,0 +1,405 @@
+<html>
+    <head>
+        <script src="https://d3js.org/d3.v7.min.js"></script>
+        <script src="https://d3js.org/topojson.v3.min.js"></script>
+    <style>
+            .graticule {
+                fill: none;
+                stroke: white;
+            }
+
+            .neighborhood-outline {
+                stroke: white;
+                stroke-width: 1px;
+                fill: none;
+            }
+
+            .gridlines line{
+                stroke: white;
+            }
+
+            .gridlines .domain {
+                display: none;
+            }
+
+            .flex-container {
+                display: flex;
+            }
+
+            #scatter1 {
+                text-align : center;
+                margin-top: 50px;
+                margin-bottom: 50px;
+                margin-left: 30px;
+            }
+
+            .flex-child {
+                flex: 1;
+            }
+
+            .flex-child:first-child {
+                margin-right: 20px;
+            }
+
+            #map-flex {
+                display: flex;
+                flex-direction: column;
+            }
+    </style>
+    </head>
+    <body>
+        <h3 style = "text-align: center"> Does Money Grow on Trees? A Look at San Francisco's Trees by Zip Code</h3>
+        <div class="flex-container">
+            <div id="map-flex">
+                <h3 id='incomemapTitle' style="text-align: center">Median Household Income by Zip Code</h3>
+                <div class="flex-child map">
+                    <svg id="choroplethincome" height="660" width="800" ></svg>
+                    <svg id="incomecolorLegend" height="100" width="800" style="background: #fff"></svg>
+                </div>
+            </div>
+    
+            <div class="flex-child barchart">
+                <h3 id='treemapTitle' style="text-align: center">Number of Trees by Zip Code</h3>
+                <svg id="choroplethtrees" height="660" width="800" ></svg>
+                <svg id="treecolorLegend" height="100" width="800" style="background: #fff"></svg>
+            </div>
+        </div>
+  
+        <div class="flex-container">
+            <div id = "scatter1">
+                <svg id="bar" height="400" width="1500"></svg>
+            </div>
+        </div>
+
+        <script>
+            const svgchoroplethincome = d3.select("#choroplethincome");
+            const incomewidth = svgchoroplethincome.attr("width");
+            const incomeheight = svgchoroplethincome.attr("height");
+            const incomemargin = { top: 20, right: 20, bottom: 20, left:20};
+            const incomemapWidth = incomewidth - incomemargin.left - incomemargin.right;
+            const incomemapHeight = incomeheight - incomemargin.top - incomemargin.bottom;
+            const incomemapArea = svgchoroplethincome.append("g")
+                            .attr("transform","translate("+incomemargin.left+","+incomemargin.top+")");
+
+            const svgchoroplethtrees = d3.select("#choroplethtrees");
+            const treeswidth = svgchoroplethtrees.attr("width");
+            const treesheight = svgchoroplethtrees.attr("height");
+            const treesmargin = { top: 20, right: 20, bottom: 20, left:20};
+            const treesmapWidth = treeswidth - treesmargin.left - treesmargin.right;
+            const treesmapHeight = treesheight - treesmargin.top - treesmargin.bottom;
+            const treesmapArea = svgchoroplethtrees.append("g")
+                            .attr("transform","translate("+treesmargin.left+","+treesmargin.top+")");
+            
+            const svg = d3.select("#bar");
+            const width = svg.attr("width");
+            const height = svg.attr("height");
+            const margin = { top: 40, right: 10, bottom: 50, left:80};
+            const chartWidth = width - margin.left - margin.right;
+            const chartHeight = height - margin.top - margin.bottom;
+            let annotations = svg.append("g").attr("id","annotations");
+            const chartArea = svg.append("g")
+                                        .attr("transform","translate("+margin.left+","+margin.top+")");
+            
+            const requestData = async function () {
+                const cleaned = await d3.csv('Street_Tree_List-2022-01-30_FILTERED.csv', d3.autoType)
+                const originalzipcodes = await d3.json("San Francisco ZIP Codes.json", d3.autoType)
+                const income = await d3.csv('income_by_zip.csv', d3.autoType)
+                const zipcodes = await d3.json('SF Zip Codes Income and Trees.json',d3.autoType)
+
+                const codes = d3.map(originalzipcodes.objects['San Francisco ZIP Codes'].geometries, d=>parseInt(d.properties.zip))
+                // var zips = topojson.feature(originalzipcodes, originalzipcodes.objects['San Francisco ZIP Codes'])
+
+                // var num_trees_zip = {}
+                // const just_trees = {}
+                // const just_public = {}
+                // const just_private = {}
+
+                // zipcodes.features.forEach(c => {
+                //     num_trees_zip[c.properties.zip] = {'num_trees': 0,
+                //                                         'med_income': 0,
+                //                                         'num_private':0,
+                //                                         'num_public':0};
+                //     just_trees[c.properties.zip] = 0;   
+                //     just_public[c.properties.zip] = 0; 
+                //     just_private[c.properties.zip] = 0; 
+                // })
+                
+                // cleaned.forEach(j  =>{
+                //     zipcodes.features.forEach(i => {
+                //         if (d3.geoContains(i,[j.Longitude,j.Latitude])) {
+                //             num_trees_zip[i.properties.zip]['num_trees'] = num_trees_zip[i.properties.zip]['num_trees']+1;
+                //             just_trees[i.properties.zip] = just_trees[i.properties.zip] + 1;
+
+                //             if (j.qCaretaker === 'Private') {
+                //                 num_trees_zip[i.properties.zip]['num_private'] = num_trees_zip[i.properties.zip]['num_private']+1;
+                //                 just_private[i.properties.zip] = just_private[i.properties.zip] + 1;
+                //             }
+                //             if (j.qCaretaker != 'Private') {
+                //                 num_trees_zip[i.properties.zip]['num_public'] = num_trees_zip[i.properties.zip]['num_public']+1;
+                //                 just_public[i.properties.zip] = just_public[i.properties.zip] + 1;
+                //             }
+                //         }
+                //     })
+                // });
+
+                // income.forEach(i =>{
+                //     num_trees_zip[i['Geo_ZCTA5'].toString()]['med_income'] = i['SE_A14006_001']
+                // })
+
+                // const final = []
+                // Object.keys(num_trees_zip).forEach((i => {
+                //     num_trees_zip[i]['zip'] = i
+                //     final.push(num_trees_zip[i])
+                // }))
+
+                const incomeExtent = d3.extent(income, d => d['SE_A14006_001'])
+                const incomeScale = d3.scaleLog().domain(incomeExtent).range([0,chartWidth]);
+       
+                const treeExtent = d3.extent(zipcodes.features, d => d.properties.num_trees)
+                const treeScale=d3.scaleLinear().domain(treeExtent).range([chartHeight, 0]);
+                const ascending_order = {}
+                zipcodes.features.forEach((i=>{
+                    ascending_order[i.properties.zip]=i.properties.med_income
+                }))
+
+                var items = Object.keys(ascending_order).map(
+                (key) => { return [key, ascending_order[key]] });
+
+                items.sort(
+                (first, second) => { return first[1] - second[1] }
+                );
+
+                var ziplabels = items.map(
+                (e) => { return e[0] });
+
+                const ziplabelScale = d3.scaleBand().domain(ziplabels).range([0, chartWidth])
+                                       .padding(0.2);
+
+                const subgroups = d3.scaleBand()
+                                    .domain(['num_public', 'num_private'])
+                                    .range([0, ziplabelScale.bandwidth()])
+                                    .padding([0])
+
+                let leftAxis = d3.axisLeft(treeScale);
+                let leftGridlines = d3.axisLeft(treeScale)
+                                        .tickSize(-chartWidth - 10)
+                                        .tickFormat("")
+                                    annotations.append("g")
+                                        .attr("class", "y axis")
+                                        .attr("transform", `translate(${margin.left - 10},${margin.top})`)
+                                        .call(leftAxis)
+                                    annotations.append("g")
+                                        .attr("class", "gridlines")
+                                        .attr("transform", `translate(${margin.left - 10},${margin.top})`)
+                                        .call(leftGridlines);
+                
+                let bottomAxis = d3.axisBottom(ziplabelScale)
+                let bottomGridlines = d3.axisBottom(ziplabelScale).tickSize(-chartHeight - 10).tickFormat("");
+                                    annotations.append("g")
+                                        .attr("class", "x axis")
+                                        .attr("transform", `translate(${margin.left},${chartHeight + margin.top + 10})`)
+                                        .call(bottomAxis);
+                                    annotations.append('g')
+                                        .attr('class', 'gridlines')
+                                        .attr('transform', `translate(${margin.left},${chartHeight + margin.top + 10})`)
+                                        .call(bottomGridlines);          
+
+                chartArea.selectAll('rect.bar').data( zipcodes.features )
+                        .join('rect').attr('class','bar1')
+                        .attr("fill", "#063970")
+                        .attr("x", d => ziplabelScale(d.properties.zip))
+                        .attr("y", d => treeScale(d.properties.num_private))
+                        .attr("height", d => treeScale(0) - treeScale(d.properties.num_private))
+                        .attr("width", subgroups.bandwidth());
+                
+                chartArea.selectAll('rect.bar').data( zipcodes.features )
+                        .join('rect').attr('class','bar2')
+                        .attr("fill", "orange")
+                        .attr("x", d => (ziplabelScale(d.properties.zip)+subgroups.bandwidth()))
+                        .attr("y", d => treeScale(d.properties.num_public))
+                        .attr("height", d => treeScale(0) - treeScale(d.properties.num_public))
+                        .attr("width", subgroups.bandwidth());
+
+                chartArea.append('text')
+                        .text('Zip Codes in San Francisco (In the Order of Increasing Median Household Income)')
+                        .attr('x', chartWidth / 2 - 250)
+                        .attr('y', chartHeight + margin.bottom - 3)
+                        .attr('font-size', '15')
+                        .style('font-weight', 'bold');
+
+                chartArea.append('text')
+                        .text('Comparing the Number of Private and Public Trees in Different Zip Codes')
+                        .attr('x', chartWidth / 2 - 330)
+                        .attr('y', -15)
+                        .attr('font-size', '22')
+                        .style('font-weight', 'bold');
+
+                chartArea.append('text')
+                        .text('Number of Trees')
+                        .attr("transform", "rotate(-90)")
+                        .attr('x', -chartHeight+95)
+                        .attr('y', -60)
+                        .style('font-weight', 'bold');
+
+                chartArea.append('rect')
+                         .attr('class', 'legendItem1')
+                         .attr('width', 20)
+                         .attr('height', 10)
+                         .attr('x', chartWidth - 155 )
+                         .attr('y', 30)
+                         .style('fill', '#063970');
+
+                chartArea.append('rect')
+                         .attr('class', 'legendItem2')
+                         .attr('width', 20)
+                         .attr('height', 10)
+                         .attr('x', chartWidth - 155 )
+                         .attr('y', 50)
+                         .style('fill', 'orange');
+                
+                chartArea.append('text')
+                         .attr('x', chartWidth - 120)
+                         .attr('y', 40)
+                         .text('Private')
+                
+                chartArea.append('text')
+                         .attr('x', chartWidth - 120)
+                         .attr('y', 60)
+                         .text('Public')
+
+                var zipsMesh = topojson.mesh(zipcodes, zipcodes.features)
+                // var zipsMesh = topojson.mesh(originalzipcodes, originalzipcodes.objects['San Francisco ZIP Codes'])
+
+                var projection = d3.geoMercator().fitSize([incomemapWidth, incomemapHeight], zipcodes)
+                var path = d3.geoPath().projection(projection);
+
+                let incomeviewport = incomemapArea.append("g");
+                incomeviewport.append("path")
+                    .attr("class","graticule")
+                    .attr("d",path(d3.geoGraticule10()));
+                incomeviewport.append("path")
+                    .datum(zipsMesh)
+                    .attr("class","neighborhood-outline")
+                    .attr("d", path);
+
+                let treesviewport = treesmapArea.append("g");
+                treesviewport.append("path")
+                    .attr("class","graticule")
+                    .attr("d",path(d3.geoGraticule10()));
+                treesviewport.append("path")
+                    .datum(zipsMesh)
+                    .attr("class","neighborhood-outline")
+                    .attr("d", path);
+                
+                
+                // zipcodes.features.forEach(j => {
+                //     j.properties['med_income'] = num_trees_zip[parseInt(j.properties['zip'])]['med_income']
+                //     j.properties['num_trees'] = num_trees_zip[parseInt(j.properties['zip'])]['num_trees']
+                //     j.properties['num_public'] = num_trees_zip[parseInt(j.properties['zip'])]['num_public']
+                //     j.properties['num_private'] = num_trees_zip[parseInt(j.properties['zip'])]['num_private']
+
+                // });
+                // console.log(JSON.stringify(zipcodes));
+
+                var incomecolors = ['#efdbff', '#caaee1', '#a482c3', '#8058a6','#5b2f89', '#33006d'] 
+                var incomevalues = d3.map(zipcodes.features, d => d.properties.med_income)
+        
+                const incomecolorScale = d3.scaleQuantile()    
+                                     .domain(incomeExtent)
+                                     .range(incomecolors);
+                incomeviewport.selectAll(".zip").data(zipcodes.features)
+                        .join("path")
+                        .attr("class","zip")
+                        .attr('fill',d=> incomecolorScale(d.properties.med_income))
+                        .attr('stroke','None')
+                        .attr("d", path);
+
+                var treescolors = ['#d2e9c6', '#afcf9f','#8cb679',  '#6a9d54', '#45852f','#196d00']
+
+                var treesvalues = d3.map(zipcodes.features, d => d.properties.num_trees)
+                const treescolorScale = d3.scaleQuantile()    
+                                     .domain(treeExtent)
+                                     .range(treescolors);
+                treesviewport.selectAll(".zip").data(zipcodes.features)
+                        .join("path")
+                        .attr("class","zip")
+                        .attr('fill',d=> treescolorScale(d.properties.num_trees))
+                        .attr('stroke','None')
+                        .attr("d", path);
+
+
+                drawLegend("#incomecolorLegend", incomecolorScale, incomecolors);
+                drawLegend("#treecolorLegend", treescolorScale, treescolors);
+                // Flexible legend-drawing function - Jeff Rzeszotarski, 2022
+                function drawLegend(legendSelector, legendColorScale, colorslist) {
+                    const offsets = {
+                        width: 10,
+                        top: 2,
+                        bottom: 24
+                    };
+
+                    const stepSize = 4;
+                    const minMaxExtendPercent = 0;
+
+                    const legend_c = d3.select(legendSelector);
+                    const legendHeight = legend_c.attr("height");
+                    const legendBarWidth = incomemapWidth;
+                    const legendMinMax = d3.extent(legendColorScale.domain());
+                    const minMaxExtension = (legendMinMax[1] - legendMinMax[0]) * minMaxExtendPercent;
+                    const barHeight = legendHeight - offsets.top - offsets.bottom;
+
+                    let barScale = d3.scaleQuantile().domain([0,
+                        legendMinMax[1] + minMaxExtension])
+                        .range([0, legendBarWidth]);
+
+                    let barAxis = d3.axisBottom(barScale);
+
+                    let bar = legend_c.append("g")
+                        .attr("class", "legend colorbar")
+                        .attr("transform", `translate(${offsets.width},${offsets.top})`)
+
+                    let thresholds = legendColorScale.quantiles();
+
+                    let textArea = d3.select('ul#thresholds');
+
+                    for (let i = 0; i < colorslist.length; i++) {
+
+                        let barWidth = legendBarWidth / colorslist.length;
+
+                        bar.append("rect")
+                            .attr("x", i * barWidth)
+                            .attr("y", 0)
+                            .attr("width", barWidth)
+                            .attr("height", barHeight)
+                            .style("fill", colorslist[i]);
+
+                        if (i != colorslist.length - 1) {
+                            bar.append("text")
+                                .attr("font-size", "10px")
+                                .attr("x", (i + 1) * barWidth - 3)
+                                .attr("y", 95)
+                                .text(Math.round(thresholds[i]))
+                        }
+                    }
+                    legend_c.append("g")
+                        .attr("class", "legend axis")
+                        .attr("transform", `translate(${offsets.width},${offsets.top + barHeight + 5})`)
+                        .call(barAxis);
+
+                }
+
+                // cleaned.forEach(i =>{
+                    
+                //     let circlePosition = projection( [i.Longitude, i.Latitude])
+                    
+                //     viewport.append("circle")
+                //         .attr('cx', circlePosition[0])
+                //         .attr('cy', circlePosition[1])
+                //         .attr('r',1)
+                //         .attr('fill','green');
+                // })
+            }
+            requestData();
+        </script>
+    </body>
+</html>
